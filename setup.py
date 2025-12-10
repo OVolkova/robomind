@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="mind",
+    name="robomind",
     version="0.0.1",
     description="Robodog Mind",
     author="Your Name",

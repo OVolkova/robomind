@@ -34,7 +34,11 @@ def resample(waveform, freq, original_freq: int = FREQUENCY):
 
 
 class TextToText:
-    def __init__(self, checkpoint_path="/Users/olly/Documents/projects/llms/gpt2/model/model_wow.pt", device=DEVICE):
+    def __init__(
+        self,
+        checkpoint_path="/Users/olly/Documents/projects/llms/gpt2/model/model_wow.pt",
+        device=DEVICE,
+    ):
         self.device = device
         self.model = self.load_model(checkpoint_path)
 
@@ -70,7 +74,7 @@ class TextToText:
         # generate new tokens
         x = self.model.generate_till_eot(x, eot_token=self.EOT).detach().tolist()[0]
         # decode new tokens starting from position len(tokens) to text
-        decoded = self.encoder.decode(x[len(tokens):])
+        decoded = self.encoder.decode(x[len(tokens) :])
         return decoded
 
 

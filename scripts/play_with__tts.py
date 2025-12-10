@@ -13,9 +13,7 @@ def test_speech_to_speech(text):
     output_signal, output_frequency = tts.generate(text)
 
     memory_file = io.BytesIO()
-    sf.write(
-            memory_file, output_signal, output_frequency, format="wav"
-    )
+    sf.write(memory_file, output_signal, output_frequency, format="wav")
     sound = AudioSegment.from_file(memory_file, format="wav")
     play(sound)
 
@@ -59,7 +57,9 @@ See this news article in Mother Jones magazine from 2014 showing how environment
 
 """
 
-    for x in ["DISCUSSION QUESTIONS",]:
+    for x in [
+        "DISCUSSION QUESTIONS",
+    ]:
         t = t.replace(x, x.lower())
     t = t.replace("\n", " ")
     for ttt in t.split("."):
@@ -73,4 +73,3 @@ See this news article in Mother Jones magazine from 2014 showing how environment
     #         for tttt in ttt.split("?"):
     #             if tttt.strip():
     #                 test_speech_to_speech(tttt)
-

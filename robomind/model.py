@@ -154,9 +154,9 @@ class GPT(nn.Module):
         # input shape is [B, T]
         # B - batch size, T - sequence length
         B, T = x.size()
-        assert (
-            T <= self.config.block_size
-        ), f"Sequence length {T} is longer than block size {self.config.block_size}"
+        assert T <= self.config.block_size, (
+            f"Sequence length {T} is longer than block size {self.config.block_size}"
+        )
 
         # position embeddings
         pos = torch.arange(T, dtype=torch.long, device=x.device)
@@ -222,9 +222,9 @@ class GPT(nn.Module):
         ]
 
         assert sorted(sd_keys) == sorted(sd_keys_hf), "mismatched keys"
-        assert len(sd_keys) == len(
-            sd_keys_hf
-        ), f"mismatched keys: {len(sd_keys)} != {len(sd_keys_hf)}"
+        assert len(sd_keys) == len(sd_keys_hf), (
+            f"mismatched keys: {len(sd_keys)} != {len(sd_keys_hf)}"
+        )
         for k in sd_keys_hf:
             if any(k.endswith(t) for t in transposed):
                 assert sd_hf[k].shape[::-1] == sd[k].shape
@@ -232,26 +232,26 @@ class GPT(nn.Module):
                     sd[k].copy_(sd_hf[k].t())
 
             else:
-                assert (
-                    sd_hf[k].shape == sd[k].shape
-                ), f"mismatched shape for {k}: {sd_hf[k].shape} != {sd[k].shape}"
+                assert sd_hf[k].shape == sd[k].shape, (
+                    f"mismatched shape for {k}: {sd_hf[k].shape} != {sd[k].shape}"
+                )
                 with torch.no_grad():
                     sd[k].copy_(sd_hf[k])
 
         for k in sd_keys_hf:
             if any(k.endswith(t) for t in transposed):
                 assert sd_hf[k].shape[::-1] == sd[k].shape
-                assert torch.allclose(
-                    sd_hf[k].t(), sd[k], atol=1e-5
-                ), f"transposed not close {k}"
+                assert torch.allclose(sd_hf[k].t(), sd[k], atol=1e-5), (
+                    f"transposed not close {k}"
+                )
 
             else:
-                assert (
-                    sd_hf[k].shape == sd[k].shape
-                ), f"mismatched shape for {k}: {sd_hf[k].shape} != {sd[k].shape}"
-                assert torch.allclose(
-                    sd_hf[k], sd[k], atol=1e-5
-                ), f"transposed not close {k}"
+                assert sd_hf[k].shape == sd[k].shape, (
+                    f"mismatched shape for {k}: {sd_hf[k].shape} != {sd[k].shape}"
+                )
+                assert torch.allclose(sd_hf[k], sd[k], atol=1e-5), (
+                    f"transposed not close {k}"
+                )
 
         print(f"Loaded.")
         return model
@@ -276,7 +276,7 @@ class GPT(nn.Module):
 
         return x
 
-    def generate_till_eot(self, x,  eot_token, wait_time=5, k=50):
+    def generate_till_eot(self, x, eot_token, wait_time=5, k=50):
         self.eval()
         start_time = time.time()
         total_generated = 0

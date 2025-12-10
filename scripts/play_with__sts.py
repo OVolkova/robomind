@@ -27,15 +27,10 @@ def test_speech_to_speech():
         output_frequency, output_signal = sts.speech_to_speech(frequency, signal)
 
         memory_file = io.BytesIO()
-        sf.write(
-            memory_file, output_signal, output_frequency, format="wav"
-        )
+        sf.write(memory_file, output_signal, output_frequency, format="wav")
         sound = AudioSegment.from_file(memory_file, format="wav")
         play(sound)
 
     print()
     for i, turn in enumerate(sts.text_context.split(EOT_WORD)):
         print(f"{('me' if i % 2 == 0 else 'model')}: {turn}")
-
-
-
