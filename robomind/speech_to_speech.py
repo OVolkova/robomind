@@ -22,14 +22,15 @@ def get_device():
 
 DEVICE = get_device()
 FREQUENCY = 16000
+ESP32_FREQUENCY = 16000  # Keep at 16kHz - ESP32 DAC may not support lower rates
 EOT_WORD = "<|endoftext|>"
 
 
-def resample(waveform, freq, original_freq: int = FREQUENCY):
-    if freq == original_freq:
+def resample(waveform, target_freq, original_freq: int = FREQUENCY):
+    if target_freq == original_freq:
         return waveform
     return scipy.signal.resample(
-        waveform, int(waveform.shape[0] * original_freq / freq)
+        waveform, int(waveform.shape[0] * target_freq / original_freq)
     )
 
 
@@ -93,12 +94,16 @@ class TextToSpeech:
             split_pattern=r"\n+",
         )
 
+        original_waveform = [a for _, _, a in generator][0]
+        print(f"Original waveform shape: {original_waveform.shape}, freq: {self.original_freq}")
         waveform = resample(
-            [a for _, _, a in generator][0],
-            freq=self.original_freq,
-            original_freq=FREQUENCY,
+            original_waveform,
+            original_freq=self.original_freq,
+            target_freq=ESP32_FREQUENCY,
         )
-        return waveform, FREQUENCY
+        print(f"Resampled waveform shape: {waveform.shape}, freq: {ESP32_FREQUENCY}")
+        return waveform, ESP32_FREQUENCY
+        # return original_waveform, self.original_freq,
 
 
 class SpeechToText:
