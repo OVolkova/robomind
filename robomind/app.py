@@ -2,7 +2,7 @@ from flask import Flask, Response, request
 import logging
 
 from robomind.process import process, random_answer
-
+CHUNK_SIZE = 2048
 
 app = Flask(__name__)
 
@@ -18,10 +18,12 @@ def random_wav_stream():
         processed_wav = random_answer()
 
         def generate():
-            while chunk := processed_wav.read(4096):
+            while chunk := processed_wav.read(CHUNK_SIZE):
                 yield chunk
 
-        return Response(generate(), mimetype="audio/wav")
+        response = Response(generate(), mimetype="audio/wav")
+        response.headers["Content-Type"] = "audio/wav"
+        return response
     except Exception as e:
         logger.error(f"Error in random endpoint: {e}")
         return {"error": str(e)}, 500
@@ -45,10 +47,12 @@ def process_wav_stream():
         processed_wav = process(audio_data)
 
         def generate():
-            while chunk := processed_wav.read(4096):
+            while chunk := processed_wav.read(CHUNK_SIZE):
                 yield chunk
 
-        return Response(generate(), mimetype="audio/wav")
+        response = Response(generate(), mimetype="audio/wav")
+        response.headers["Content-Type"] = "audio/wav"
+        return response
     except Exception as e:
         logger.error(f"Error processing audio: {e}")
         return {"error": str(e)}, 500
@@ -57,6 +61,7 @@ def process_wav_stream():
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint for ESP32 to verify server is running"""
+    logger.info("Health check requested")
     return {"status": "ok", "service": "robomind"}, 200
 
 
