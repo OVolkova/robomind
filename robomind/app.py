@@ -1,7 +1,11 @@
-from flask import Flask, Response, request
+import base64
+
+from flask import Flask, Response, jsonify, request
 import logging
 
 from robomind.process import process, random_answer
+from robomind.v2_process import V2Processor
+
 CHUNK_SIZE = 2048
 
 app = Flask(__name__)
@@ -9,6 +13,15 @@ app = Flask(__name__)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_v2_processor: V2Processor | None = None
+
+
+def _get_v2_processor() -> V2Processor:
+    global _v2_processor
+    if _v2_processor is None:
+        _v2_processor = V2Processor()
+    return _v2_processor
 
 
 @app.route("/random", methods=["POST"])
@@ -55,6 +68,36 @@ def process_wav_stream():
         return response
     except Exception as e:
         logger.error(f"Error processing audio: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.route("/v2/process", methods=["POST"])
+def v2_process_route():
+    """LLM-powered speech processing with robot action output."""
+    data = request.get_json()
+    if not data or "audio" not in data:
+        return {"error": "Missing 'audio' field in JSON body"}, 400
+
+    audio_bytes = base64.b64decode(data["audio"])
+    current_action = data.get("current_action", "balance")
+
+    logger.info(
+        f"v2/process: current_action={current_action!r}, audio={len(audio_bytes)} bytes"
+    )
+
+    try:
+        out_audio, response_text, new_action = _get_v2_processor().process(
+            audio_bytes, current_action
+        )
+        return jsonify(
+            {
+                "audio": base64.b64encode(out_audio).decode(),
+                "response_text": response_text,
+                "new_action": new_action,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in v2/process: {e}")
         return {"error": str(e)}, 500
 
 
