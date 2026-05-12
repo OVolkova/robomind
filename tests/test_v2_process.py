@@ -6,7 +6,9 @@ from robomind.v2_process import V2Processor
 _DUMMY_WAV = b"RIFF\x00\x00\x00\x00WAVEfmt "
 
 
-def _make_processor(llm_text: str = "Hello!", llm_action: str | None = None) -> V2Processor:
+def _make_processor(
+    llm_text: str = "Hello!", llm_action: str | None = None
+) -> V2Processor:
     """Return a V2Processor with all heavy deps replaced by lightweight mocks."""
     proc = V2Processor.__new__(V2Processor)
     proc.speech_to_text = MagicMock(return_value="sit down please")
@@ -27,9 +29,10 @@ def _patch_io():
 
 
 def _run(proc: V2Processor, current_action: str = "balance"):
-    with patch("robomind.v2_process.torchaudio") as mock_ta, patch(
-        "robomind.v2_process.sf"
-    ) as mock_sf:
+    with (
+        patch("robomind.v2_process.torchaudio") as mock_ta,
+        patch("robomind.v2_process.sf") as mock_sf,
+    ):
         mock_ta.load.return_value = (MagicMock(), 16000)
         mock_sf.write.side_effect = lambda buf, *a, **kw: buf.write(b"WAVDATA")
         return proc.process(_DUMMY_WAV, current_action=current_action)
@@ -43,10 +46,12 @@ def test_process_returns_three_tuple():
     assert len(result) == 3
 
 
-def test_process_audio_is_bytes():
-    out_audio, _, _ = _run(_make_processor())
-    assert isinstance(out_audio, bytes)
-    assert len(out_audio) > 0
+def test_process_audio_is_bytesio():
+    import io as _io
+
+    out_buf, _, _ = _run(_make_processor())
+    assert isinstance(out_buf, _io.BytesIO)
+    assert len(out_buf.read()) > 0
 
 
 def test_process_response_text():

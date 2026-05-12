@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,7 @@ def _b64(data: bytes = b"RIFF\x00\x00\x00\x00WAVEfmt ") -> str:
 
 def _mock_processor(text: str = "Hello!", action: str | None = None) -> MagicMock:
     proc = MagicMock()
-    proc.process.return_value = (b"WAVOUT", text, action)
+    proc.process.return_value = (io.BytesIO(b"WAVOUT"), text, action)
     return proc
 
 
@@ -62,60 +63,59 @@ def test_no_content_type_returns_4xx(client):
 # ── success response shape ────────────────────────────────────────────────────
 
 
-def test_response_contains_required_fields(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor("Hi!", "sit")):
-        r = client.post(
-            "/v2/process",
-            content_type="application/json",
-            data=json.dumps({"audio": _b64(), "current_action": "wkF"}),
-        )
-    assert r.status_code == 200
-    body = r.get_json()
-    assert "audio" in body
-    assert "response_text" in body
-    assert "new_action" in body
-
-
-def test_audio_field_is_valid_base64(client):
+def test_response_is_wav(client):
     with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
         r = client.post(
             "/v2/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
-    body = r.get_json()
-    decoded = base64.b64decode(body["audio"])
-    assert decoded == b"WAVOUT"
+    assert r.status_code == 200
+    assert r.content_type == "audio/wav"
 
 
-def test_response_text_matches(client):
+def test_response_body_is_wav_bytes(client):
+    with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
+        r = client.post(
+            "/v2/process",
+            content_type="application/json",
+            data=json.dumps({"audio": _b64()}),
+        )
+    assert r.data == b"WAVOUT"
+
+
+def test_response_text_in_header(client):
     with patch("robomind.app._get_v2_processor", return_value=_mock_processor("Woof!")):
         r = client.post(
             "/v2/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
-    assert r.get_json()["response_text"] == "Woof!"
+    assert r.headers["X-Response-Text"] == "Woof!"
 
 
-def test_new_action_returned(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor(action="ksit")):
+def test_new_action_in_header(client):
+    with patch(
+        "robomind.app._get_v2_processor", return_value=_mock_processor(action="ksit")
+    ):
         r = client.post(
             "/v2/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
-    assert r.get_json()["new_action"] == "ksit"
+    assert r.headers["X-New-Action"] == "ksit"
 
 
-def test_new_action_null_when_no_action(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor(action=None)):
+def test_new_action_header_absent_when_no_action(client):
+    with patch(
+        "robomind.app._get_v2_processor", return_value=_mock_processor(action=None)
+    ):
         r = client.post(
             "/v2/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
-    assert r.get_json()["new_action"] is None
+    assert "X-New-Action" not in r.headers
 
 
 # ── current_action default ────────────────────────────────────────────────────

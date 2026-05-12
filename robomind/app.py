@@ -1,4 +1,5 @@
 import base64
+import io
 
 from flask import Flask, Response, jsonify, request
 import logging
@@ -86,16 +87,20 @@ def v2_process_route():
     )
 
     try:
-        out_audio, response_text, new_action = _get_v2_processor().process(
+        wav_buf, response_text, new_action = _get_v2_processor().process(
             audio_bytes, current_action
         )
-        return jsonify(
-            {
-                "audio": base64.b64encode(out_audio).decode(),
-                "response_text": response_text,
-                "new_action": new_action,
-            }
-        )
+
+        def generate():
+            while chunk := wav_buf.read(CHUNK_SIZE):
+                yield chunk
+
+        response = Response(generate(), mimetype="audio/wav")
+        response.headers["Content-Type"] = "audio/wav"
+        response.headers["X-Response-Text"] = response_text
+        if new_action:
+            response.headers["X-New-Action"] = new_action
+        return response
     except Exception as e:
         logger.error(f"Error in v2/process: {e}")
         return {"error": str(e)}, 500

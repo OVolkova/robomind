@@ -48,7 +48,6 @@ def process(audio_data):
 
 
 def random_answer():
-
-    output_signal, output_frequency = sts.text_to_speech.generate('Hi')
+    output_signal, output_frequency = sts.text_to_speech.generate("Hi")
 
     return _return_wav_file(output_frequency, output_signal)

@@ -22,7 +22,7 @@ class V2Processor:
 
     def process(
         self, audio_bytes: bytes, current_action: str = "balance"
-    ) -> tuple[bytes, str, str | None]:
+    ) -> tuple[io.BytesIO, str, str | None]:
         # Speech → text
         signal, frequency = torchaudio.load(io.BytesIO(audio_bytes))
         waveform = signal.numpy()[0]
@@ -58,4 +58,4 @@ class V2Processor:
         buf.seek(0)
 
         serial_action = f"k{action_key}" if action_key else None
-        return buf.read(), response_text or "", serial_action
+        return buf, response_text or "", serial_action

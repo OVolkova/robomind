@@ -95,7 +95,9 @@ class TextToSpeech:
         )
 
         original_waveform = [a for _, _, a in generator][0]
-        print(f"Original waveform shape: {original_waveform.shape}, freq: {self.original_freq}")
+        print(
+            f"Original waveform shape: {original_waveform.shape}, freq: {self.original_freq}"
+        )
         waveform = resample(
             original_waveform,
             original_freq=self.original_freq,
