@@ -1,11 +1,13 @@
 import io
-from collections import deque
 
 import soundfile as sf
 import torchaudio
 
 from robomind.llm_client import PERFORM_ACTION_TOOL, SYSTEM_PROMPT, create_llm_client
 from robomind.speech_to_speech import SpeechToText, TextToSpeech
+
+_MAX_HISTORY = 10
+_KEEP_RECENT = 4  # messages preserved verbatim after summarisation
 
 
 class V2Processor:
@@ -18,7 +20,40 @@ class V2Processor:
         self.llm = create_llm_client(provider=provider, model=model)
         print(f"  Loaded LLM client (provider=openai, model={self.llm.model})")
 
-        self.history: deque[dict] = deque(maxlen=10)
+        self.history: list[dict] = []
+
+    def _maybe_summarize(self) -> None:
+        """When history reaches _MAX_HISTORY, summarise the oldest messages and
+        replace them with a single system note, keeping _KEEP_RECENT recent ones."""
+        if len(self.history) < _MAX_HISTORY:
+            return
+
+        to_summarize = self.history[:-_KEEP_RECENT]
+        recent = self.history[-_KEEP_RECENT:]
+
+        summary_text, _ = self.llm.complete(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarise the following robot-dog conversation in 2-3 sentences. "
+                        "Note topics discussed and any physical actions the robot performed."
+                    ),
+                },
+                *to_summarize,
+                {
+                    "role": "user",
+                    "content": "Summarise the conversation above briefly.",
+                },
+            ]
+        )
+
+        summary_msg = {
+            "role": "system",
+            "content": f"Summary of earlier conversation: {summary_text or 'Previous exchanges occurred.'}",
+        }
+        self.history = [summary_msg, *recent]
+        print(f"[v2] History summarised → {len(self.history)} messages kept")
 
     def process(
         self, audio_bytes: bytes, current_action: str = "balance"
@@ -45,9 +80,10 @@ class V2Processor:
         )
         print(f"[v2] LLM: text={response_text!r}, action={action_key!r}")
 
-        # Update history with clean text (no action annotation)
+        # Update history then summarise if full
         self.history.append({"role": "user", "content": user_text})
         self.history.append({"role": "assistant", "content": response_text or ""})
+        self._maybe_summarize()
 
         # Text → speech
         spoken_text = response_text.strip() or "Okay."

@@ -1,4 +1,3 @@
-from collections import deque
 from unittest.mock import MagicMock, patch
 
 from robomind.v2_process import V2Processor
@@ -17,7 +16,7 @@ def _make_processor(
     proc.llm = MagicMock()
     proc.llm.model = "gpt-5.4-nano"
     proc.llm.complete.return_value = (llm_text, llm_action)
-    proc.history = deque(maxlen=10)
+    proc.history = []
     return proc
 
 
@@ -108,11 +107,40 @@ def test_history_roles_alternate():
     assert roles == ["user", "assistant"]
 
 
-def test_history_maxlen_enforced():
+def test_history_summarised_when_full():
+    # After 5 calls (10 messages) summarisation fires: 1 summary + 4 recent = 5
     proc = _make_processor()
-    for _ in range(7):  # 7 calls → 14 entries → capped at maxlen=10
+    for _ in range(5):
         _run(proc)
-    assert len(proc.history) == 10
+    from robomind.v2_process import _KEEP_RECENT
+
+    assert len(proc.history) == _KEEP_RECENT + 1
+
+
+def test_summary_message_is_system_role():
+    proc = _make_processor()
+    for _ in range(5):
+        _run(proc)
+    assert proc.history[0]["role"] == "system"
+    assert "Summary" in proc.history[0]["content"]
+
+
+def test_summary_calls_llm_with_old_messages():
+    proc = _make_processor()
+    for _ in range(5):
+        _run(proc)
+    # The last llm.complete call is the summarisation call (no tools arg)
+    last_call_args, last_call_kwargs = proc.llm.complete.call_args
+    assert "tools" not in last_call_kwargs
+
+
+def test_history_stays_bounded_across_multiple_summarisations():
+    proc = _make_processor()
+    for _ in range(12):  # enough to trigger summarisation twice
+        _run(proc)
+    from robomind.v2_process import _MAX_HISTORY
+
+    assert len(proc.history) < _MAX_HISTORY
 
 
 def test_history_fed_into_subsequent_call():
