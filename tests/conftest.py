@@ -24,7 +24,6 @@ _STUBS = [
     "pydub",
     "pyaudio",
     "torchcodec",
-    "omegaconf",
 ]
 
 for _mod in _STUBS:
