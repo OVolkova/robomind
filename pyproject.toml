@@ -8,12 +8,10 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "torch (>=2.7.0,<3.0.0)",
     "torchaudio (>=2.7.0,<3.0.0)",
     "soundfile (>=0.13.1,<0.14.0)",
     "scipy (>=1.15.2,<2.0.0)",
     "transformers (>=4.51.3,<5.0.0)",
-    "tiktoken (>=0.9.0,<0.10.0)",
     "flask (>=3.1.0,<4.0.0)",
     "requests (>=2.32.3,<3.0.0)",
     "kokoro (>=0.9.4,<0.10.0)",
@@ -21,8 +19,9 @@ dependencies = [
     "speechrecognition (>=3.14.2,<4.0.0)",
     "pyaudio (>=0.2.14,<0.3.0)",
     "pysoundfile (>=0.9.0.post1,<0.10.0)",
-    "torchcodec (>=0.9.0,<0.10.0)",
     "openai (>=1.0.0)",
+    "torch (>=2.12.0,<3.0.0)",
+    "torchcodec (>=0.14.0,<0.15.0)",
 ]
 
 [tool.poetry]

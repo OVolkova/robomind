@@ -23,7 +23,6 @@ _STUBS = [
     "speech_recognition",
     "pydub",
     "pyaudio",
-    "torchcodec",
 ]
 
 for _mod in _STUBS:

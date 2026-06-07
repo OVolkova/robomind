@@ -1,9 +1,17 @@
+import logging
 import scipy
 import torch
 from kokoro import KPipeline
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
+import io
+
+import soundfile as sf
+import torchaudio
+
 
 from robomind.llm_client import PERFORM_ACTION_TOOL, SYSTEM_PROMPT, create_llm_client
+
+logger = logging.getLogger(__name__)
 
 
 def get_device():
@@ -13,7 +21,7 @@ def get_device():
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = "mps"
 
-    print(f"device is {device}")
+    logger.info("device is %s", device)
     return device
 
 
@@ -63,7 +71,7 @@ class TextToText:
             },
             *recent,
         ]
-        print(f"[TextToText] History summarised → {len(self.history)} messages kept")
+        logger.info("[TextToText] History summarised → %d messages kept", len(self.history))
 
     def generate(self, user_text: str, current_action: str = "balance") -> tuple[str, str | None]:
         messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -72,7 +80,7 @@ class TextToText:
             {"role": "user", "content": f"[Current robot action: {current_action}]\n{user_text}"}
         )
         response_text, action_key = self.llm.complete(messages, tools=[PERFORM_ACTION_TOOL])
-        print(f"[TextToText] LLM: text={response_text!r}, action={action_key!r}")
+        logger.info("[TextToText] LLM: text=%r, action=%r", response_text, action_key)
         self.history.append({"role": "user", "content": user_text})
         self.history.append({"role": "assistant", "content": response_text or ""})
         self._maybe_summarize()
@@ -85,7 +93,7 @@ class TextToSpeech:
         self.pipeline = KPipeline(lang_code="b")  # <= make sure lang_code matches voice
 
     def generate(self, text):
-        print(f"Generating speech for text -  {text}")
+        logger.info("Generating speech for text: %s", text)
         # 4️⃣ Generate, display, and save audio files in a loop.
         generator = self.pipeline(
             text,
@@ -95,15 +103,13 @@ class TextToSpeech:
         )
 
         original_waveform = [a for _, _, a in generator][0]
-        print(
-            f"Original waveform shape: {original_waveform.shape}, freq: {self.original_freq}"
-        )
+        logger.info("Original waveform shape: %s, freq: %d", original_waveform.shape, self.original_freq)
         waveform = resample(
             original_waveform,
             original_freq=self.original_freq,
             target_freq=ESP32_FREQUENCY,
         )
-        print(f"Resampled waveform shape: {waveform.shape}, freq: {ESP32_FREQUENCY}")
+        logger.info("Resampled waveform shape: %s, freq: %d", waveform.shape, ESP32_FREQUENCY)
         return waveform, ESP32_FREQUENCY
         # return original_waveform, self.original_freq,
 
@@ -120,6 +126,7 @@ class SpeechToText:
         self.model = WhisperForConditionalGeneration.from_pretrained(model_name)
         self.model.to(device)
         self.model.config.forced_decoder_ids = None
+        self.model.generation_config.forced_decoder_ids = None
         self.original_freq = original_freq
 
     def __call__(self, waveform, freq):
@@ -139,3 +146,35 @@ class SpeechToText:
         return transcription[0]
 
 
+class SpeechToSpeechActionProcessor:
+    def __init__(self, provider: str | None = None, model: str | None = None):
+        logger.info("Loading models...")
+        self.speech_to_text = SpeechToText()
+        logger.info("  Loaded SpeechToText (Whisper)")
+        self.text_to_speech = TextToSpeech()
+        logger.info("  Loaded TextToSpeech (Kokoro)")
+        self.text_to_text = TextToText(provider=provider, model=model)
+        logger.info("  Loaded TextToText (LLM)")
+
+    def process(
+        self, audio_bytes: bytes, current_action: str = "balance"
+    ) -> tuple[io.BytesIO, str, str | None]:
+        # Speech → text
+        signal, frequency = torchaudio.load(io.BytesIO(audio_bytes))
+        waveform = signal.numpy()[0]
+        user_text = self.speech_to_text(waveform, frequency)
+        logger.info("[v2] STT: %r", user_text)
+
+        # LLM call (history management handled inside TextToText)
+        response_text, action_key = self.text_to_text.generate(user_text, current_action)
+
+        # Text → speech
+        spoken_text = response_text.strip() or "Okay."
+        out_waveform, out_freq = self.text_to_speech.generate(spoken_text)
+
+        buf = io.BytesIO()
+        sf.write(buf, out_waveform, out_freq, format="wav", subtype="PCM_16")
+        buf.seek(0)
+
+        serial_action = f"k{action_key}" if action_key else None
+        return buf, response_text or "", serial_action

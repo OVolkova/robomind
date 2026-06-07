@@ -4,7 +4,7 @@ import io
 from flask import Flask, Response, request
 import logging
 
-from robomind.robomind.process import V2Processor
+from robomind.speech_to_speech import SpeechToSpeechActionProcessor
 
 CHUNK_SIZE = 2048
 
@@ -14,18 +14,18 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-_v2_processor: V2Processor | None = None
+_sts_processor: SpeechToSpeechActionProcessor | None = None
 
 
-def _get_v2_processor() -> V2Processor:
-    global _v2_processor
-    if _v2_processor is None:
-        _v2_processor = V2Processor()
-    return _v2_processor
+def _get_sts_processor() -> SpeechToSpeechActionProcessor:
+    global _sts_processor
+    if _sts_processor is None:
+        _sts_processor = SpeechToSpeechActionProcessor()
+    return _sts_processor
 
 
 @app.route("/process", methods=["POST"])
-def v2_process_route():
+def process_route():
     """LLM-powered speech processing with robot action output."""
     data = request.get_json()
     if not data or "audio" not in data:
@@ -39,7 +39,7 @@ def v2_process_route():
     )
 
     try:
-        wav_buf, response_text, new_action = _get_v2_processor().process(
+        wav_buf, response_text, new_action = _get_sts_processor().process(
             audio_bytes, current_action
         )
 

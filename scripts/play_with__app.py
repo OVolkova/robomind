@@ -1,12 +1,12 @@
 """
-Test script for POST /v2/process.
+Test script for POST /process.
 
 Records from the Mac microphone, sends audio + current robot action to the
-v2 endpoint, plays the spoken response, and prints the new action command
+/process endpoint, plays the spoken response, and prints the new action command
 that should be forwarded to the Petoi firmware.
 
 Usage:
-    python scripts/play_with__app_v2.py [--action wkF] [--rounds 10]
+    python scripts/play_with__app.py [--action wkF] [--rounds 10]
 """
 
 import argparse
@@ -43,7 +43,7 @@ def run(starting_action: str, rounds: int) -> None:
         wav_bytes = audio.get_wav_data()
 
         response = requests.post(
-            f"{SERVER}/v2/process",
+            f"{SERVER}/process",
             json={
                 "audio": base64.b64encode(wav_bytes).decode(),
                 "current_action": current_action,

@@ -2,7 +2,7 @@ import json
 import os
 from abc import ABC, abstractmethod
 
-from robomind.robomind.petoi_commands import PETOI_COMMANDS
+from robomind.petoi_commands import PETOI_COMMANDS
 
 _COMMANDS_SUMMARY = "\n".join(f"  {k}: {v}" for k, v in PETOI_COMMANDS.items())
 

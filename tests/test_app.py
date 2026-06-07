@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture()
 def app():
-    from robomind.robomind.app import app as flask_app
+    from robomind.app import app as flask_app
 
     flask_app.config["TESTING"] = True
     return flask_app
@@ -64,7 +64,7 @@ def test_no_content_type_returns_4xx(client):
 
 
 def test_response_is_wav(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
+    with patch("robomind.app._get_sts_processor", return_value=_mock_processor()):
         r = client.post(
             "/process",
             content_type="application/json",
@@ -75,7 +75,7 @@ def test_response_is_wav(client):
 
 
 def test_response_body_is_wav_bytes(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
+    with patch("robomind.app._get_sts_processor", return_value=_mock_processor()):
         r = client.post(
             "/process",
             content_type="application/json",
@@ -85,7 +85,7 @@ def test_response_body_is_wav_bytes(client):
 
 
 def test_response_text_in_header(client):
-    with patch("robomind.app._get_v2_processor", return_value=_mock_processor("Woof!")):
+    with patch("robomind.app._get_sts_processor", return_value=_mock_processor("Woof!")):
         r = client.post(
             "/process",
             content_type="application/json",
@@ -96,7 +96,7 @@ def test_response_text_in_header(client):
 
 def test_new_action_in_header(client):
     with patch(
-        "robomind.app._get_v2_processor", return_value=_mock_processor(action="ksit")
+        "robomind.app._get_sts_processor", return_value=_mock_processor(action="ksit")
     ):
         r = client.post(
             "/process",
@@ -108,7 +108,7 @@ def test_new_action_in_header(client):
 
 def test_new_action_header_absent_when_no_action(client):
     with patch(
-        "robomind.app._get_v2_processor", return_value=_mock_processor(action=None)
+        "robomind.app._get_sts_processor", return_value=_mock_processor(action=None)
     ):
         r = client.post(
             "/process",
@@ -123,7 +123,7 @@ def test_new_action_header_absent_when_no_action(client):
 
 def test_current_action_defaults_to_balance(client):
     proc = _mock_processor()
-    with patch("robomind.app._get_v2_processor", return_value=proc):
+    with patch("robomind.app._get_sts_processor", return_value=proc):
         client.post(
             "/process",
             content_type="application/json",
@@ -135,7 +135,7 @@ def test_current_action_defaults_to_balance(client):
 
 def test_current_action_forwarded(client):
     proc = _mock_processor()
-    with patch("robomind.app._get_v2_processor", return_value=proc):
+    with patch("robomind.app._get_sts_processor", return_value=proc):
         client.post(
             "/process",
             content_type="application/json",
@@ -151,7 +151,7 @@ def test_current_action_forwarded(client):
 def test_processor_error_returns_500(client):
     proc = MagicMock()
     proc.process.side_effect = RuntimeError("model crashed")
-    with patch("robomind.app._get_v2_processor", return_value=proc):
+    with patch("robomind.app._get_sts_processor", return_value=proc):
         r = client.post(
             "/process",
             content_type="application/json",
