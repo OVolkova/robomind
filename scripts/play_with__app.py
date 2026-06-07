@@ -65,8 +65,9 @@ def run(starting_action: str, rounds: int) -> None:
             current_action = new_action
             print(f"           → Send to firmware: {new_action}")
 
-        sound = AudioSegment.from_file(io.BytesIO(response.content), format="wav")
-        play(sound)
+        if response.content:
+            sound = AudioSegment.from_file(io.BytesIO(response.content), format="wav")
+            play(sound)
         print()
 
 

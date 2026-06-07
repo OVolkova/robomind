@@ -87,16 +87,16 @@ def test_current_action_forwarded_to_text_to_text():
 # ── fallback spoken text ──────────────────────────────────────────────────────
 
 
-def test_fallback_spoken_text_when_llm_returns_empty():
+def test_no_tts_when_llm_returns_empty():
     proc = _make_processor(llm_text="")
     _run(proc)
-    proc.text_to_speech.generate.assert_called_once_with("Okay.")
+    proc.text_to_speech.generate.assert_not_called()
 
 
-def test_no_fallback_when_llm_returns_whitespace_only():
+def test_no_tts_when_llm_returns_whitespace_only():
     proc = _make_processor(llm_text="   ")
     _run(proc)
-    proc.text_to_speech.generate.assert_called_once_with("Okay.")
+    proc.text_to_speech.generate.assert_not_called()
 
 
 def test_no_fallback_when_llm_has_text():

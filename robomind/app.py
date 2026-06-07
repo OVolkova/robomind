@@ -7,6 +7,7 @@ import logging
 from robomind.speech_to_speech import SpeechToSpeechActionProcessor
 
 CHUNK_SIZE = 2048
+ECHO_AUDIO = False  # set False to re-enable full pipeline
 
 app = Flask(__name__)
 
@@ -39,6 +40,12 @@ def process_route():
     )
 
     try:
+        if ECHO_AUDIO:
+            response = Response(audio_bytes, mimetype="audio/wav")
+            response.headers["Content-Type"] = "audio/wav"
+            response.headers["X-Response-Text"] = "[echo]"
+            return response
+
         wav_buf, response_text, new_action = _get_sts_processor().process(
             audio_bytes, current_action
         )

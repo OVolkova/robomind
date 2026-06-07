@@ -1,4 +1,5 @@
 import logging
+import re
 import scipy
 import torch
 from kokoro import KPipeline
@@ -26,14 +27,15 @@ def get_device():
 
 
 DEVICE = get_device()
-FREQUENCY = 16000
+WHISPER_FREQUENCY = 16000
+KOKORO_VOICE_FREQ = 24000  # Kokoro's TTS model runs at 24kHz
 ESP32_FREQUENCY = 16000  # Keep at 16kHz - ESP32 DAC may not support lower rates
 
 _MAX_HISTORY = 10
 _KEEP_RECENT = 4
 
 
-def resample(waveform, target_freq, original_freq: int = FREQUENCY):
+def resample(waveform, target_freq: int, original_freq: int):
     if target_freq == original_freq:
         return waveform
     return scipy.signal.resample(
@@ -79,6 +81,7 @@ class TextToText:
         messages.append(
             {"role": "user", "content": f"[Current robot action: {current_action}]\n{user_text}"}
         )
+        logger.info("[TextToText] Sending to LLM: %d messages, user_text=%r", len(messages), user_text)
         response_text, action_key = self.llm.complete(messages, tools=[PERFORM_ACTION_TOOL])
         logger.info("[TextToText] LLM: text=%r, action=%r", response_text, action_key)
         self.history.append({"role": "user", "content": user_text})
@@ -88,8 +91,8 @@ class TextToText:
 
 
 class TextToSpeech:
-    def __init__(self, original_freq: int = 24000):
-        self.original_freq = original_freq
+    def __init__(self, model_freq: int = KOKORO_VOICE_FREQ):
+        self.model_freq = model_freq
         self.pipeline = KPipeline(lang_code="b")  # <= make sure lang_code matches voice
 
     def generate(self, text):
@@ -103,10 +106,10 @@ class TextToSpeech:
         )
 
         original_waveform = [a for _, _, a in generator][0]
-        logger.info("Original waveform shape: %s, freq: %d", original_waveform.shape, self.original_freq)
+        logger.info("Original waveform shape: %s, freq: %d", original_waveform.shape, self.model_freq)
         waveform = resample(
             original_waveform,
-            original_freq=self.original_freq,
+            original_freq=self.model_freq,
             target_freq=ESP32_FREQUENCY,
         )
         logger.info("Resampled waveform shape: %s, freq: %d", waveform.shape, ESP32_FREQUENCY)
@@ -118,7 +121,7 @@ class SpeechToText:
     def __init__(
         self,
         model_name="openai/whisper-tiny.en",
-        original_freq: int = FREQUENCY,
+        model_freq: int = WHISPER_FREQUENCY,
         device: str = DEVICE,
     ):
         self.device = device
@@ -127,21 +130,24 @@ class SpeechToText:
         self.model.to(device)
         self.model.config.forced_decoder_ids = None
         self.model.generation_config.forced_decoder_ids = None
-        self.original_freq = original_freq
+        self.model_freq = model_freq
 
     def __call__(self, waveform, freq):
-        waveform = resample(waveform, freq, self.original_freq)
-        input_features = self.processor(
-            waveform, sampling_rate=self.original_freq, return_tensors="pt"
-        ).input_features
-        input_features = input_features.to(self.device)
+        logger.info("STT input: shape=%s freq=%d model_freq=%d", waveform.shape, freq, self.model_freq)
+        waveform = resample(waveform, self.model_freq, freq)
+        logger.info("STT resampled: shape=%s", waveform.shape)
+        processed = self.processor(
+            waveform, sampling_rate=self.model_freq, return_tensors="pt", return_attention_mask=True
+        )
+        input_features = processed.input_features.to(self.device)
+        attention_mask = processed.attention_mask.to(self.device)
 
         # generate token ids
-        predicted_ids = self.model.generate(input_features)
+        predicted_ids = self.model.generate(input_features, attention_mask=attention_mask)
 
         # decode token ids to text
         transcription = self.processor.batch_decode(
-            predicted_ids, skip_special_tokens=False
+            predicted_ids, skip_special_tokens=True
         )
         return transcription[0]
 
@@ -163,18 +169,20 @@ class SpeechToSpeechActionProcessor:
         signal, frequency = torchaudio.load(io.BytesIO(audio_bytes))
         waveform = signal.numpy()[0]
         user_text = self.speech_to_text(waveform, frequency)
-        logger.info("[v2] STT: %r", user_text)
+        logger.info("STT: %r", user_text)
 
         # LLM call (history management handled inside TextToText)
         response_text, action_key = self.text_to_text.generate(user_text, current_action)
 
         # Text → speech
-        spoken_text = response_text.strip() or "Okay."
-        out_waveform, out_freq = self.text_to_speech.generate(spoken_text)
-
-        buf = io.BytesIO()
-        sf.write(buf, out_waveform, out_freq, format="wav", subtype="PCM_16")
-        buf.seek(0)
+        spoken_text = response_text.strip()
+        if spoken_text:
+            out_waveform, out_freq = self.text_to_speech.generate(spoken_text)
+            buf = io.BytesIO()
+            sf.write(buf, out_waveform, out_freq, format="wav", subtype="PCM_16")
+            buf.seek(0)
+        else:
+            buf = io.BytesIO()
 
         serial_action = f"k{action_key}" if action_key else None
         return buf, response_text or "", serial_action
