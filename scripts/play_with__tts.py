@@ -3,7 +3,7 @@ from pydub.playback import play
 import soundfile as sf
 import io
 
-from robomind.speech_to_speech import TextToSpeech
+from robomind.robomind.speech_to_speech import TextToSpeech
 
 
 tts = TextToSpeech()

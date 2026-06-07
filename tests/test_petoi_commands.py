@@ -1,4 +1,4 @@
-from robomind.petoi_commands import GAITS, PETOI_COMMANDS, POSTURES, TRICKS
+from robomind.robomind.petoi_commands import GAITS, PETOI_COMMANDS, POSTURES, TRICKS
 
 
 def test_all_descriptions_non_empty():

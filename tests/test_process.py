@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from robomind.v2_process import V2Processor
+from robomind.robomind.process import V2Processor
 
 _DUMMY_WAV = b"RIFF\x00\x00\x00\x00WAVEfmt "
 
@@ -112,7 +112,7 @@ def test_history_summarised_when_full():
     proc = _make_processor()
     for _ in range(5):
         _run(proc)
-    from robomind.v2_process import _KEEP_RECENT
+    from robomind.robomind.process import _KEEP_RECENT
 
     assert len(proc.history) == _KEEP_RECENT + 1
 
@@ -138,7 +138,7 @@ def test_history_stays_bounded_across_multiple_summarisations():
     proc = _make_processor()
     for _ in range(12):  # enough to trigger summarisation twice
         _run(proc)
-    from robomind.v2_process import _MAX_HISTORY
+    from robomind.robomind.process import _MAX_HISTORY
 
     assert len(proc.history) < _MAX_HISTORY
 

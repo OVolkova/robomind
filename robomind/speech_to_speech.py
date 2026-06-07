@@ -1,12 +1,9 @@
 import scipy
-import tiktoken
 import torch
-from collections import deque
 from kokoro import KPipeline
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-from robomind.model import GPT, GPTConfig
-# from robomind.stm import ShortTermMemory
+from robomind.llm_client import PERFORM_ACTION_TOOL, SYSTEM_PROMPT, create_llm_client
 
 
 def get_device():
@@ -23,7 +20,9 @@ def get_device():
 DEVICE = get_device()
 FREQUENCY = 16000
 ESP32_FREQUENCY = 16000  # Keep at 16kHz - ESP32 DAC may not support lower rates
-EOT_WORD = "<|endoftext|>"
+
+_MAX_HISTORY = 10
+_KEEP_RECENT = 4
 
 
 def resample(waveform, target_freq, original_freq: int = FREQUENCY):
@@ -35,41 +34,49 @@ def resample(waveform, target_freq, original_freq: int = FREQUENCY):
 
 
 class TextToText:
-    def __init__(
-        self,
-        checkpoint_path="/Users/olly/Documents/projects/llms/gpt2/model/model_wow_clean.pt",
-        device=DEVICE,
-    ):
-        self.device = device
-        self.model = self.load_model(checkpoint_path)
+    def __init__(self, provider: str | None = None, model: str | None = None):
+        self.llm = create_llm_client(provider=provider, model=model)
+        self.history: list[dict] = []
 
-        self.encoder = tiktoken.get_encoding("gpt2")
-        self.EOT = self.encoder._special_tokens["<|endoftext|>"]  # end of text token
-
-    def load_model(self, checkpoint_path):
-        with torch.serialization.safe_globals([GPTConfig]):
-            checkpoint = torch.load(checkpoint_path, map_location=torch.device("mps"))
-        print(
-            f" loaded model from step {checkpoint['step']} with validation loss {checkpoint['val_loss']}"
+    def _maybe_summarize(self) -> None:
+        if len(self.history) < _MAX_HISTORY:
+            return
+        to_summarize = self.history[:-_KEEP_RECENT]
+        recent = self.history[-_KEEP_RECENT:]
+        summary_text, _ = self.llm.complete(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarise the following robot-dog conversation in 2-3 sentences. "
+                        "Note topics discussed and any physical actions the robot performed."
+                    ),
+                },
+                *to_summarize,
+                {"role": "user", "content": "Summarise the conversation above briefly."},
+            ]
         )
+        self.history = [
+            {
+                "role": "system",
+                "content": f"Summary of earlier conversation: {summary_text or 'Previous exchanges occurred.'}",
+            },
+            *recent,
+        ]
+        print(f"[TextToText] History summarised → {len(self.history)} messages kept")
 
-        model = GPT(config=checkpoint["config"])
-        model.load_state_dict(checkpoint["model"], strict=False)
-
-        model.to(self.device)
-        model.eval()
-        return model
-
-    def generate(self, text):
-        # convert text to list of tokens
-        tokens = self.encoder.encode_ordinary(text)
-        # convert tokens to tensor
-        x = torch.tensor(tokens, dtype=torch.long).unsqueeze(0).to(self.device)
-        # generate new tokens
-        x = self.model.generate_till_eot(x, eot_token=self.EOT).detach().tolist()[0]
-        # decode new tokens starting from position len(tokens) to text
-        decoded = self.encoder.decode(x[len(tokens) :])
-        return decoded
+    def generate(self, user_text: str, current_action: str = "balance") -> tuple[str, str | None]:
+        messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend(self.history)
+        messages.append(
+            {"role": "user", "content": f"[Current robot action: {current_action}]\n{user_text}"}
+        )
+        response_text, action_key = self.llm.complete(messages, tools=[PERFORM_ACTION_TOOL])
+        print(f"[TextToText] LLM: text={response_text!r}, action={action_key!r}")
+        self.history.append({"role": "user", "content": user_text})
+        self.history.append({"role": "assistant", "content": response_text or ""})
+        self._maybe_summarize()
+        return response_text, action_key
 
 
 class TextToSpeech:
@@ -132,46 +139,3 @@ class SpeechToText:
         return transcription[0]
 
 
-class SpeechToSpeech:
-    def __init__(self):
-        print("Loading models...")
-        self.text_to_text = TextToText()
-        print("Loaded text_to_text")
-        self.speech_to_text = SpeechToText()
-        print("Loaded speech_to_text")
-        self.text_to_speech = TextToSpeech()
-        print("Loaded text_to_speech")
-
-        self.text_context = deque([])
-        self.max_context_length = 5
-
-    def reset_context(self):
-        self.text_context = deque([])
-
-    def speech_to_speech(self, input_frequency, input_signal):
-        print("transcribing audio...")
-        request_text = self.speech_to_text(input_signal, input_frequency)
-
-        output_frequency, output_signal = self.answer_to_text_with_speech(request_text)
-        return output_frequency, output_signal
-
-    def answer_to_text_with_speech(self, request_text):
-        self.text_context.append(request_text)
-        print(f" -- request_text - {request_text}")
-
-        print("generating text...")
-        response_text = ""
-        while len(response_text.strip()) == 0:
-            response_text = self.text_to_text.generate(EOT_WORD.join(self.text_context))
-        response_text = response_text.replace("\n", " ")
-        response_text = response_text.replace(EOT_WORD, " ")
-        self.text_context.append(response_text)
-        if len(self.text_context) > self.max_context_length:
-            self.text_context.popleft()
-        print(f" -- response_text - {response_text}")
-        print(f" -- full context - {self.text_context}")
-
-        print("generating audio...")
-        output_signal, output_frequency = self.text_to_speech.generate(response_text)
-        print("done")
-        return output_frequency, output_signal

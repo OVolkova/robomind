@@ -4,7 +4,7 @@ from pydub.playback import play
 import soundfile as sf
 import io
 
-from robomind.speech_to_speech import EOT_WORD, SpeechToSpeech
+from robomind.robomind.speech_to_speech import EOT_WORD, SpeechToSpeech
 
 
 sts = SpeechToSpeech()

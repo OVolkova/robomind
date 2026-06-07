@@ -3,14 +3,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from robomind.llm_client import (
+from robomind.robomind.llm_client import (
     PERFORM_ACTION_TOOL,
     SYSTEM_PROMPT,
     AnthropicLLMClient,
     OpenAILLMClient,
     create_llm_client,
 )
-from robomind.petoi_commands import PETOI_COMMANDS
+from robomind.robomind.petoi_commands import PETOI_COMMANDS
 
 
 # ── tool schema ──────────────────────────────────────────────────────────────

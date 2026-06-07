@@ -1,53 +1,40 @@
 import io
-import random
 
-import torchaudio
 import soundfile as sf
+import torchaudio
 
-from robomind.speech_to_speech import SpeechToSpeech
-
-sts = SpeechToSpeech()
-
-RANDOM_REQUEST_TEXTS = [
-    "What is volcano?",
-    "Why rainbows have 7 colors?",
-    "What is evolution?",
-    "What is the meaning of life?",
-    "What is the universe?",
-    "What is the theory of relativity?",
-]
+from robomind.robomind.speech_to_speech import SpeechToText, TextToSpeech, TextToText
 
 
-def _return_wav_file(output_frequency, output_signal):
-    """Return audio as WAV format (PCM) in a BytesIO stream."""
-    memory_file = io.BytesIO()
-    sf.write(
-        memory_file, output_signal, output_frequency, format="wav", subtype="PCM_16"
-    )
-    memory_file.seek(0)  # Reset pointer to the beginning of the BytesIO object
-    return memory_file
+class V2Processor:
+    def __init__(self, provider: str | None = None, model: str | None = None):
+        print("Loading V2 models...")
+        self.speech_to_text = SpeechToText()
+        print("  Loaded SpeechToText (Whisper)")
+        self.text_to_speech = TextToSpeech()
+        print("  Loaded TextToSpeech (Kokoro)")
+        self.text_to_text = TextToText(provider=provider, model=model)
+        print("  Loaded TextToText (LLM)")
 
+    def process(
+        self, audio_bytes: bytes, current_action: str = "balance"
+    ) -> tuple[io.BytesIO, str, str | None]:
+        # Speech → text
+        signal, frequency = torchaudio.load(io.BytesIO(audio_bytes))
+        waveform = signal.numpy()[0]
+        user_text = self.speech_to_text(waveform, frequency)
+        print(f"[v2] STT: {user_text!r}")
 
-def process(audio_data):
-    """Process the audio stream WAV and return the processed WAV as a stream."""
-    # Detect format from data
-    signal, frequency = torchaudio.load(io.BytesIO(audio_data))
-    signal = signal.numpy()[0]
+        # LLM call (history management handled inside TextToText)
+        response_text, action_key = self.text_to_text.generate(user_text, current_action)
 
-    output_frequency, output_signal = sts.speech_to_speech(frequency, signal)
+        # Text → speech
+        spoken_text = response_text.strip() or "Okay."
+        out_waveform, out_freq = self.text_to_speech.generate(spoken_text)
 
-    return _return_wav_file(output_frequency, output_signal)
+        buf = io.BytesIO()
+        sf.write(buf, out_waveform, out_freq, format="wav", subtype="PCM_16")
+        buf.seek(0)
 
-
-# def random_answer():
-#     request_text = random.choice(RANDOM_REQUEST_TEXTS)
-
-#     output_frequency, output_signal = sts.answer_to_text_with_speech(request_text)
-
-#     return _return_wav_file(output_frequency, output_signal)
-
-
-def random_answer():
-    output_signal, output_frequency = sts.text_to_speech.generate("Hi")
-
-    return _return_wav_file(output_frequency, output_signal)
+        serial_action = f"k{action_key}" if action_key else None
+        return buf, response_text or "", serial_action

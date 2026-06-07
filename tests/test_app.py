@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture()
 def app():
-    from robomind.app import app as flask_app
+    from robomind.robomind.app import app as flask_app
 
     flask_app.config["TESTING"] = True
     return flask_app
@@ -42,13 +42,13 @@ def test_health_check_unchanged(client):
 
 
 def test_missing_body_returns_400(client):
-    r = client.post("/v2/process", content_type="application/json", data="{}")
+    r = client.post("/process", content_type="application/json", data="{}")
     assert r.status_code == 400
 
 
 def test_missing_audio_field_returns_400(client):
     r = client.post(
-        "/v2/process",
+        "/process",
         content_type="application/json",
         data=json.dumps({"current_action": "sit"}),
     )
@@ -56,7 +56,7 @@ def test_missing_audio_field_returns_400(client):
 
 
 def test_no_content_type_returns_4xx(client):
-    r = client.post("/v2/process", data=b"raw bytes")
+    r = client.post("/process", data=b"raw bytes")
     assert 400 <= r.status_code < 500
 
 
@@ -66,7 +66,7 @@ def test_no_content_type_returns_4xx(client):
 def test_response_is_wav(client):
     with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -77,7 +77,7 @@ def test_response_is_wav(client):
 def test_response_body_is_wav_bytes(client):
     with patch("robomind.app._get_v2_processor", return_value=_mock_processor()):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -87,7 +87,7 @@ def test_response_body_is_wav_bytes(client):
 def test_response_text_in_header(client):
     with patch("robomind.app._get_v2_processor", return_value=_mock_processor("Woof!")):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -99,7 +99,7 @@ def test_new_action_in_header(client):
         "robomind.app._get_v2_processor", return_value=_mock_processor(action="ksit")
     ):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -111,7 +111,7 @@ def test_new_action_header_absent_when_no_action(client):
         "robomind.app._get_v2_processor", return_value=_mock_processor(action=None)
     ):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -125,7 +125,7 @@ def test_current_action_defaults_to_balance(client):
     proc = _mock_processor()
     with patch("robomind.app._get_v2_processor", return_value=proc):
         client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
@@ -137,7 +137,7 @@ def test_current_action_forwarded(client):
     proc = _mock_processor()
     with patch("robomind.app._get_v2_processor", return_value=proc):
         client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64(), "current_action": "trF"}),
         )
@@ -153,7 +153,7 @@ def test_processor_error_returns_500(client):
     proc.process.side_effect = RuntimeError("model crashed")
     with patch("robomind.app._get_v2_processor", return_value=proc):
         r = client.post(
-            "/v2/process",
+            "/process",
             content_type="application/json",
             data=json.dumps({"audio": _b64()}),
         )
