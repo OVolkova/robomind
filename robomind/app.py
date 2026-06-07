@@ -97,7 +97,7 @@ def v2_process_route():
 
         response = Response(generate(), mimetype="audio/wav")
         response.headers["Content-Type"] = "audio/wav"
-        response.headers["X-Response-Text"] = response_text
+        response.headers["X-Response-Text"] = response_text.encode("ascii", errors="replace").decode("ascii")
         if new_action:
             response.headers["X-New-Action"] = new_action
         return response

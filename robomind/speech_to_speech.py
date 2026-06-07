@@ -5,7 +5,7 @@ from collections import deque
 from kokoro import KPipeline
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-from robomind.model import GPT
+from robomind.model import GPT, GPTConfig
 # from robomind.stm import ShortTermMemory
 
 
@@ -37,7 +37,7 @@ def resample(waveform, target_freq, original_freq: int = FREQUENCY):
 class TextToText:
     def __init__(
         self,
-        checkpoint_path="/Users/olly/Documents/projects/llms/gpt2/model/model_wow.pt",
+        checkpoint_path="/Users/olly/Documents/projects/llms/gpt2/model/model_wow_clean.pt",
         device=DEVICE,
     ):
         self.device = device
@@ -47,21 +47,14 @@ class TextToText:
         self.EOT = self.encoder._special_tokens["<|endoftext|>"]  # end of text token
 
     def load_model(self, checkpoint_path):
-        checkpoint = torch.load(
-            checkpoint_path, map_location=torch.device("mps"), weights_only=False
-        )
+        with torch.serialization.safe_globals([GPTConfig]):
+            checkpoint = torch.load(checkpoint_path, map_location=torch.device("mps"))
         print(
             f" loaded model from step {checkpoint['step']} with validation loss {checkpoint['val_loss']}"
         )
 
         model = GPT(config=checkpoint["config"])
-        # Remove "_orig_mod." prefix from keys
-        new_state_dict = {
-            k.replace("_orig_mod.", ""): v for k, v in checkpoint["model"].items()
-        }
-
-        # Load modified state dict into model
-        model.load_state_dict(new_state_dict, strict=False)
+        model.load_state_dict(checkpoint["model"], strict=False)
 
         model.to(self.device)
         model.eval()
